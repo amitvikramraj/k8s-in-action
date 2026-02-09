@@ -56,6 +56,8 @@ There are 2 types of encryption algorithm:
 
 * This process of negotiation b/w the browser and the server is called the *"the Handshake."*
 
+* **
+
 **The Handshake Process:** 
 
 1. The browser sends a list of SSL/TLS versions and a list of encryption algorithms that it can work with.
@@ -136,6 +138,8 @@ A certificate authority (CA) is a third-party organization with 3 main objective
 
 Example Orgs: Let's Encrypt, Symantec, Comodo, GoDaddy, DigiCert
 
+* **
+
 **Which certificate should you buy?**
 
 You have basically 3 flavors:
@@ -145,6 +149,8 @@ You have basically 3 flavors:
 2. *Organization validated* – The certificate requires the validation and manual verification of the organization behind the certificate.
 
 3. *Extended validation* – The certificate requires an exhaustive verification of the business.
+
+* **
 
 **How does certificates get validated?**
 
@@ -156,6 +162,8 @@ When a CA issues a certificate, they sign the certificate with their root certif
 
 If a cat-astrophy would occur and the root certificate is compromised, it's easier to revoke the intermediate certificates, since the root certificates are installed on each device.
 
+* **
+
 **Chain of Trust** – The Certificate Validation Process
 
 1. The browser connects to a site via HTTPS and dowloads the certificate
@@ -165,6 +173,8 @@ If a cat-astrophy would occur and the root certificate is compromised, it's easi
 
 2. If it is a root certificate, it's verified
    *  In the event that the last certificate is not a root certificate, and there are no more certificates to download, the chain is untrusted.
+
+* **
 
 **Why use a certificate authority when you can self-sign your certificates?**
 
