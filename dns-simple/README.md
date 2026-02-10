@@ -1,7 +1,7 @@
 # Notes from DNS Simple Comics
 
 1. [How HTTPS Works!](./how-https-works.md)
-2. [How DNS Works]()
+2. [How DNS Works](./how-dns-works.md)
 
 Refrences:
 * [DNS Simple](https://dnsimple.com/comics)
