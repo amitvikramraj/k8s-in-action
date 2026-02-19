@@ -7,7 +7,7 @@
         },
         {
             "column": 119,
-            "color": "green"
+            "color": "purple"
         }
     ],
     "editor.formatOnSave": true,
@@ -39,6 +39,6 @@
     },
     "python.analysis.autoImportCompletions": true,
     "python.analysis.indexing": true,
-    "python.languageServer": "Pylance",
+    "python.languageServer": "None",
     "python.analysis.completeFunctionParens": true,
 }
