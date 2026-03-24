@@ -11,15 +11,15 @@
         }
     ],
     "editor.formatOnSave": true,
-    "python.testing.pytestArgs": ["tests"],
+    "python.testing.pytestArgs": ["${workspaceFolder}/kiada/tests"],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "testing.defaultGutterClickAction": "debug",
     "python.analysis.inlayHints.pytestParameters": true,
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/kiada/.venv/bin/python",
     // https://github.com/astral-sh/ruff-vscode
     "editor.defaultFormatter": "charliermarsh.ruff",
-    "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+    "ruff.configuration": "${workspaceFolder}/kiada/pyproject.toml",
     "ruff.organizeImports": true,
     // notebook settings
     "notebook.formatOnSave.enabled": true,
@@ -41,4 +41,13 @@
     "python.analysis.indexing": true,
     "python.languageServer": "None",
     "python.analysis.completeFunctionParens": true,
+    // Cursor specific settings
+    "cursorpyright.analysis.autoImportCompletions": true,
+    "basedpyright.analysis.autoImportCompletions": true,
+    "basedpyright.analysis.typeCheckingMode": "off",
+    "basedpyright.analysis.inlayHints.callArgumentNames": false,
+    "basedpyright.analysis.inlayHints.callArgumentNamesMatching": false,
+    "basedpyright.analysis.inlayHints.variableTypes": false,
+    "basedpyright.analysis.inlayHints.genericTypes": false,
+    "basedpyright.analysis.inlayHints.functionReturnTypes": false,
 }
