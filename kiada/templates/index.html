@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kubernetes in Action Demo Application v0.1</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/stylesheet.css') }}">
+</head>
+<body>
+<div id="background"></div>
+<div id="cover"><img src="{{ url_for('static', path='/cover.png') }}" alt="Kubernetes in Action Book Cover"></div>
+
+<div id="content">
+    <div class="bubble">
+        <p>Kiada version {{version}}<br>Request processed by <b>{{hostname}}</b><br>Client IP: <b>{{clientIP}}</b></p>
+    </div>
+</div>
+
+</body>
+</html>

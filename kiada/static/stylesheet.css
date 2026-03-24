@@ -1,0 +1,44 @@
+body {
+    font-family: Arial, sans-serif;
+    font-size: clamp(0.8rem, 1vw + 0.5rem, 1.2rem);
+    background-color: #586256;
+}
+
+#background {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 40%;
+    height: 100%;
+    background-color: white;
+}
+
+#cover {
+    position: fixed;
+    top: 0;
+    right: 5%;
+}
+
+#cover img {
+    max-width: 100%;
+    height: auto;
+}
+
+#content {
+    position: fixed;
+    top: 80px;
+    left: 5%;
+    max-width: 50%;
+}
+
+.bubble {
+    background-color: white;
+    padding: 30px;
+    margin-bottom: 20px;
+    box-shadow: 10px 10px 20px 0px #333333;
+}
+
+.bubble h1 {
+    margin-top: 0;
+    font-size: 1.6em;
+}
