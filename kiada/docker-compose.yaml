@@ -1,0 +1,14 @@
+services:
+  kiada:
+    container_name: kiada
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    volumes:
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./main.py:/app/main.py
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock

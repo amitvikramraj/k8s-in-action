@@ -9,11 +9,28 @@ start() {
 	uv run -- uvicorn 'main:app' --host 0.0.0.0 --port 8080 --reload
 }
 
-docker_start() {
-	docker run -p 8080:8080 kiada:latest
+docker-start:dev() {
+	# docker run -p 8080:8080 kiada:latest
+
+	# remove the container if it exists
+	# docker rm -f kiada 2>/dev/null || true
+
+	# # run the container
+	# docker run --rm --name kiada \
+	# 	--publish 8080:8080 \
+	# 	--volume "${THIS_DIR}/static:/app/static" \
+	# 	--volume "${THIS_DIR}/templates:/app/templates" \
+	# 	--volume "${THIS_DIR}/main.py:/app/main.py" \
+	# 	--volume "${THIS_DIR}/pyproject.toml:/app/pyproject.toml" \
+	# 	--volume "${THIS_DIR}/README.md:/app/README.md" \
+	# 	--volume "${THIS_DIR}/uv.lock:/app/uv.lock" \
+	# 	--volume "${THIS_DIR}/run:/app/run" \
+	# 	kiada:latest
+
+	docker compose up --build --remove-orphans
 }
 
-docker_build() {
+docker-build() {
 	docker build -t kiada:latest .
 }
 
