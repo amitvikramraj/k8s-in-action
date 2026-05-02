@@ -7,3 +7,5 @@
 <h1 align="center">Kubernetes in Action</h1>
 
 Notes from the book Kubernetes in Action by Marko Lukša, Kevin Conner.
+
+> [Book Repo](https://github.com/luksa/kubernetes-in-action-2nd-edition)

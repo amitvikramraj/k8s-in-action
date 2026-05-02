@@ -1,8 +1,9 @@
 FROM python:3.12-slim-trixie
 
-# Install uv
+# Install uv, globally
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# Set the workdir where all the app related files live
 WORKDIR /app
 
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1

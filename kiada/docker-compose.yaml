@@ -1,6 +1,6 @@
 services:
   kiada:
-    container_name: kiada
+    container_name: kiada-container
     build:
       context: .
       dockerfile: Dockerfile
