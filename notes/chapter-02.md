@@ -490,7 +490,7 @@ CONTAINER ID   NAME              CPU %     MEM USAGE / LIMIT    MEM %     NET I/
 
 **Behind the scenes, all these Docker options merely configure the cgroups of the process. It’s the Kernel that enforces these limits.**
 
-## Strengthening isolation between containers – Privileges
+## Strengthening isolation b/w containers – Privileges
 
 Linux namespaces and cgroups separate the containers’ environments and prevent one container from starving the other containers of compute resources. But **the processes in these containers use the same system kernel, so we can’t say that they are fully isolated.** A rogue container could make malicious system calls that would affect its neighbors.
 
@@ -543,3 +543,20 @@ Containers can also be secured by using two additional mandatory access control 
 With SELinux, you attach labels to files and system resources, as well as to users and processes. A user or process can only access a file or resource if the labels of all subjects and objects involved match a set of policies.
 
 AppArmor is similar but uses file paths instead of labels and focuses on processes rather than users. Both SELinux and AppArmor considerably improve the security of an operating system.
+
+
+# Summary
+
+* Containers are regular processes that are isolated from each other and all other processes in the host OS.
+
+* Containers are much lighter than VMs, but because they use the same Linux kernel, they are not as isolated.
+
+* Docker was the first container platform to make containers popular and the first container runtime supported by Kubernetes. Now, other containers are supported through the Container Runtime Interface (CRI).
+
+* A container image contains the user application and all its dependencies. It is distributed through a container registry and used to create running containers.
+
+* Containers can be downloaded and executed with a single docker run command.
+
+* Docker builds an image from a Dockerfile that contains commands to execute during the build process. Images consist of layers that can be shared between multiple images. Each layer only needs to be transmitted and stored once.
+
+* Containers are isolated by Linux kernel features called namespaces, control groups, capabilities, seccomp, AppArmor, and/or SELinux. Namespaces ensure that a container sees only a part of the resources available on the host, control groups limit the amount of a resource it can use, while other features strengthen the isolation between containers.
