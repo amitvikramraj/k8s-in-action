@@ -104,6 +104,9 @@ CONTAINER ID   IMAGE                  COMMAND                  CREATED          
 e4dbf9a7e195   kindest/node:v1.35.0   "/usr/local/bin/entr…"   59 seconds ago   Up 56 seconds                               kind-worker2
 d0ec3c431c1a   kindest/node:v1.35.0   "/usr/local/bin/entr…"   59 seconds ago   Up 56 seconds   127.0.0.1:50692->6443/tcp   kind-control-plane
 2470f4bc33e6   kindest/node:v1.35.0   "/usr/local/bin/entr…"   59 seconds ago   Up 56 seconds                               kind-worker
+
+# delete a cluster
+kind delete cluster --name <defaults to kind>
 ```
 
 Unlike Minikube, where you use `minikube ssh` to log into the node if you want to explore the processes running inside of it, with kind, you use `docker exec`.
