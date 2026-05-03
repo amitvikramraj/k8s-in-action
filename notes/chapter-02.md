@@ -560,3 +560,100 @@ AppArmor is similar but uses file paths instead of labels and focuses on process
 * Docker builds an image from a Dockerfile that contains commands to execute during the build process. Images consist of layers that can be shared between multiple images. Each layer only needs to be transmitted and stored once.
 
 * Containers are isolated by Linux kernel features called namespaces, control groups, capabilities, seccomp, AppArmor, and/or SELinux. Namespaces ensure that a container sees only a part of the resources available on the host, control groups limit the amount of a resource it can use, while other features strengthen the isolation between containers.
+
+
+# Appendix
+
+## 1. What is a Linux kernel? Why is it named "kernel"?
+
+The Linux kernel is the core program of a Linux-based system. It sits between the hardware and the programs running on the machine.
+
+Applications do not usually talk to hardware directly. Instead, they ask the kernel to do things through system calls, such as:
+
+* start a process
+* allocate memory
+* read or write a file
+* send data over the network
+* create a network socket
+* access a device
+
+The kernel is responsible for managing the machine's main resources:
+
+* CPU time
+* memory
+* processes
+* filesystems
+* networking
+* devices
+* permissions and security boundaries
+
+It is called the *kernel* because it is the central part of the operating system, similar to the kernel or seed inside a fruit. Everything else is built around it.
+
+## 2. How is the kernel different from the Linux operating system?
+
+Strictly speaking, Linux is only the kernel.
+
+A complete Linux operating system includes the Linux kernel plus many user-space programs and libraries around it. These include:
+
+* shell programs such as `bash` or `zsh`
+* command-line tools such as `ls`, `ps`, `cp`, and `grep`
+* system services such as `systemd`
+* package managers such as `apt`, `dnf`, or `pacman`
+* libraries such as the C library
+* graphical desktop components, if installed
+
+For example, Ubuntu, Debian, Fedora, and Arch are Linux operating systems, or more precisely Linux distributions. They all use the Linux kernel, but they package it with different user-space tools, defaults, package managers, and release processes.
+
+The distinction matters for containers because containers share the host's Linux kernel, but they can have their own user-space environment. For example, an Ubuntu container can run on a Fedora host because the container brings Ubuntu user-space tools while still using the Fedora host's kernel.
+
+## 3. What are namespaces in the Linux kernel? Why do we need them?
+
+Namespaces are a Linux kernel feature that lets the kernel show different views of system resources to different processes.
+
+Without namespaces, all processes on a machine see the same global system view. They can see the same process tree, network interfaces, hostname, mount points, users, and IPC resources, depending on their permissions.
+
+With namespaces, a process can be placed in an isolated view of one or more resources. For example:
+
+* a process namespace can make a container see only its own processes
+* a network namespace can give a container its own network interfaces, IP addresses, routing table, and ports
+* a mount namespace can give a container its own filesystem view
+* a UTS namespace can give a container its own hostname
+* a user namespace can give a process different user and group IDs inside the namespace
+* an IPC namespace can isolate shared memory and message queues
+* a cgroup namespace can isolate the view of control groups
+
+We need namespaces because containers are not separate virtual machines. A container is just one or more regular Linux processes running on the host kernel. Namespaces make those processes *look* like they are running in their own machine-like environment.
+
+Process-level isolation is important because many programs assume they are running in a normal operating system environment. A containerized application should not see or interfere with unrelated processes on the host or in other containers. Isolation helps with:
+
+* security, by reducing what a compromised process can observe or affect
+* correctness, by preventing one application from accidentally depending on another application's resources
+* operational simplicity, by letting each container behave as if it owns its small environment
+* multi-tenancy, by allowing many workloads to run on the same host without sharing the same process and network view
+
+Namespaces provide isolation of visibility. They do not, by themselves, limit how much CPU or memory a process can consume. Resource limits are handled by control groups (`cgroups`).
+
+## 4. What is a host? Why do we need different hostnames on a system?
+
+A host is a computer or machine that runs workloads and participates in a network. In container discussions, the *host* usually means the physical machine or virtual machine whose kernel is running the containers.
+
+For example, if Docker runs a container on your laptop, your laptop is the host. If Kubernetes runs a Pod on a worker node, that worker node is the host for the Pod's containers.
+
+A hostname is the human-readable name a system uses to identify itself, especially on a network or inside an operating system environment.
+
+Different hostnames are useful because they help programs and people distinguish one environment from another. For example:
+
+* the physical or virtual machine has its own hostname
+* each container can have its own hostname inside its UTS namespace
+* Kubernetes Pods can get their own names and DNS identities
+
+A container may have a different hostname from the host machine because the container is meant to behave like a small isolated system. If every container saw the host's real hostname, processes inside containers would not get a clean machine-like identity, and multiple containers on the same host would be harder to distinguish.
+
+Different hostnames help with:
+
+* service discovery
+* logs and debugging
+* network identity
+* avoiding confusion between the host machine and isolated container environments
+
+In short, the host is the real machine or VM providing the kernel and resources. The hostname is an identity visible to processes. Linux namespaces allow containers to have their own hostname while still running on the same host kernel.
