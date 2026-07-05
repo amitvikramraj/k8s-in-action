@@ -114,6 +114,23 @@ If the application is built on the APIs of Kubernetes instead of directly on the
 
 ![K8s-Architecture](./images/chapter-01/k8s-architecture.png)
 
+
+```md
+┌─────────────────────────────────────────────────────────┐
+│                    KUBERNETES CLUSTER                   │
+├──────────────────────────┬──────────────────────────────┤
+│     CONTROL PLANE        │       WORKLOAD PLANE         │
+│     (master nodes)       │       (worker nodes)         │
+│                          │                              │
+│  "The brain"             │  "Where your apps run"       │
+│  - API Server            │  - Your application Pods     │
+│  - etcd                  │  - Kubelet                   │
+│  - Scheduler             │  - Container runtime         │
+│  - Controllers           │  - kube-proxy                │
+│                          │  - DNS, CNI, logging, etc.   │
+└──────────────────────────┴──────────────────────────────┘
+```
+
 K8s consists of nodes divided into 2 groups:
 
 1. A set of *control plane nodes* to host the control plane components, which are the brains of the system, since they control the entire cluster.
@@ -262,13 +279,59 @@ The following actions take place when you deploy the application:
 * The system continuously works to maintain the declared desired state.
 
 
-
 ### Overall Flow of Deployment
 
-1. Submit manifest → API stores objects in etcd.
-2. Controllers create instance objects.
-3. Scheduler assigns nodes.
-4. Kubelets start containers via the container runtime.
-5. kube-proxy configures load balancing.
-6. Controllers and Kubelets continuously monitor and maintain health.
+```mermaid
+sequenceDiagram
+    participant You
+    participant API as API Server
+    participant etcd
+    participant Ctrl as Controllers
+    participant Sched as Scheduler
+    participant Kubelet
+    participant Proxy as kube-proxy
 
+    You->>API: Submit manifest (YAML)
+    API->>etcd: Store objects
+    Ctrl->>API: Notice new objects
+    Ctrl->>API: Create instance objects (Pods)
+    Sched->>API: Assign each Pod to a node
+    Kubelet->>API: See Pod assigned to my node
+    Kubelet->>Kubelet: Start container via runtime
+    Proxy->>API: See Pods ready
+    Proxy->>Proxy: Configure load balancer
+    Note over Ctrl,Kubelet: Continuous monitoring & self-healing
+```
+
+```md
+YOU (kubectl/YAML)
+        │
+        ▼
+   API SERVER ◄──────────► etcd
+        │
+   ┌────┴────┐
+   ▼         ▼
+Controllers  Scheduler
+   │         │
+   │         └── assigns Pods to nodes
+   └── creates Pods from Deployment
+        │
+        ▼
+   WORKER NODES
+   ┌──────────────────┐
+   │ Kubelet          │ → starts containers
+   │ Container runtime│
+   │ kube-proxy       │ → load balances
+   │ Your Pods        │
+   └──────────────────┘
+```
+
+
+1. Submit manifest → API server validates and writes to etcd
+2. Controllers notice objects → create instance objects (e.g. Pods from a Deployment)
+3. Scheduler assigns each instance to a worker node
+4. Kubelet on that node runs the container via the runtime
+5. kube-proxy configures load balancing when instances are ready
+6. Controllers + Kubelets keep watching and reconciling forever
+
+**Desired state reconciliation:** The system never stops. If a Pod dies, the kubelet restarts it. If a node dies, controllers reschedule. The cluster always tries to match what's in etcd.
