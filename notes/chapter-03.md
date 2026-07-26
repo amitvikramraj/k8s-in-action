@@ -136,3 +136,89 @@ dddd45682e397       c3fcf259c473a       3 minutes ago       Running             
 07c7bf34574ef       88898f1d1a62a       3 minutes ago       Running             kube-controller-manager   0                   cfc4f3d37e024       kube-controller-manager-kind-control-plane   kube-system
 f0f994206ebff       ddc8422d4d35a       3 minutes ago       Running             kube-scheduler            0                   66d0f7fd74f10       kube-scheduler-kind-control-plane            kube-system
 ```
+
+## Interacting with Kubernetes
+
+kubectl communicates with the Kubernetes API server, which is part of the Kubernetes Control Plane. The control plane then triggers the other components to do whatever needs to be done based on the changes you made via the API.
+
+![](./images/chapter-03/kubectl.png)
+
+kubectl loads it configuration from a config file called _kubeconfig_.
+
+
+# Deploying an Application in a Cluster
+
+## Running your first application
+
+Two ways to deploy:
+
+* **Declarative** — write YAML/JSON that describes the desired objects, then `kubectl apply`.
+* **Imperative** — create objects with one-line commands like `kubectl create deployment` (easier when learning).
+
+### Deployments
+
+A **Deployment** is the object that represents an application running in the cluster. Creating one tells Kubernetes: “keep this many replicas of this container image running.”
+
+```shell
+$ kubectl create deployment kiada --image=kiada:latest
+deployment.apps/kiada created
+```
+
+You specify:
+
+1. Object type: Deployment
+2. Name: `kiada`
+3. Container image: `kiada:latest` (either from local docker daemon or pulled from Docker Hub by default)
+
+This stores the object in the Kubernetes API — your **desired state**. Kubernetes then works to make the **actual state** match it.
+
+```shell
+$ kubectl get deployments
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+kiada   0/1     1            0           6s
+```
+
+* `UP-TO-DATE` — how many replicas match the desired pod template
+* `READY` / `AVAILABLE` — how many are actually ready to serve traffic
+
+### Pods (not containers)
+
+```shell
+$ kubectl get containers
+error: the server doesn't have a resource type "containers"
+```
+
+Containers are **not** a top-level Kubernetes object. The smallest deployable unit is a **pod**.
+
+A **pod** is a group of one or more co-located containers that:
+
+* Run on the **same worker node**
+* Share Linux namespaces (network, UTS, and others depending on the pod spec)
+* Share one IP, hostname, and port space — like a small logical computer for one application
+
+![](./images/chapter-03/deployment.png)
+
+Pods are scheduled across worker nodes. Containers in the same pod see each other as if alone on a machine; they don’t see processes from other pods, even on the same node.
+
+### Listing and inspecting pods
+
+Creating a Deployment creates one or more pods under it:
+
+```shell
+$ kubectl get pods
+NAME                     READY     STATUS    RESTARTS   AGE
+kiada-9d785b578-p449x    0/1       Pending   0          1m
+```
+
+Typical lifecycle:
+
+1. **Pending** — scheduled (or waiting to be); node may still be pulling the image
+2. **Running** — container created and started
+
+If the image can’t be pulled (private registry, wrong name, etc.), `STATUS` shows the failure. Use `kubectl describe pod <name>` and check the **Events** section for scheduling, pull, create, and start details.
+
+```shell
+$ kubectl describe pod kiada-9d785b578-p449x
+# ... look at Events at the bottom:
+# Scheduled → Pulling → Pulled → Created → Started
+```
