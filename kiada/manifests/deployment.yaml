@@ -35,3 +35,24 @@ spec:
             limits:
               cpu: "100m"  # 0.100 CPU cores
               memory: "256Mi"
+---
+# Create a Service of type "LoadBalancer" to expose the app to the outside world
+# Locally this does not fully work with `kind` because locally there is no
+# external service to provision a LoadBalancer, so EXTERNAL-IP stays `<pending>`.
+# Run `kubectl -n kiada get svc kiada-service` to see this.
+#
+# As a work around we can use `cloud-provider-kind` program that can connect to kind
+# cluster and can provision a LB container for the services. Refer Chapter 3 notes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kiada-service
+  namespace: kiada
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: kiada        # This much match the Pod Label
+  ports:
+  - protocol: TCP
+    port: 8080        # Port exposed by this service 
+    targetPort: 8080  # Port your container is listening on

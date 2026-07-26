@@ -222,3 +222,153 @@ $ kubectl describe pod kiada-9d785b578-p449x
 # ... look at Events at the bottom:
 # Scheduled → Pulling → Pulled → Created → Started
 ```
+
+## Understanding how a deployment is created
+
+![](./images/chapter-03/deployment-creation.png)
+
+1. `kubectl create` command sends an HTTP request to the Kubernetes API Server.
+2. Kubernetes then creates a new Pod object, which is then assigned or _scheduled_ on one of the worker nodes.
+3. Kubernetes Agent (the Kubelet) on the worker node see the newly created Pod object, sees that it is scheduled on its node, instructs Docker to pull the specific image from the registry, creates a container from the image and executes it.
+
+> The term _scheduling_ refers to the assignment of the pod to a node. The pod runs immediately, not at some point in the future. Just like how the CPU scheduler in an operating system selects what CPU to run a process on, the scheduler in Kubernetes decides what worker node should execute each container. Unlike an OS process, once a pod is assigned to a node, it runs only on that node. Even if it fails, this instance of the pod is never moved to other nodes, as is the case with CPU processes, but a new pod instance may be created to replace it.
+
+In an multi-node setup none of the other worker nodes are involved the process.
+
+
+## Service: Exposing application to the world
+
+Pods get an IP, but that IP is **internal to the cluster**. To reach the app from outside, create a **Service**.
+
+Service types differ by who can reach them:
+
+* some only expose pods _inside_ the cluster (`ClusterIP`)
+* others expose them _externally_ (`NodePort`, `LoadBalancer`, ...)
+
+### Creating a LoadBalancer Service (imperative)
+
+```shell
+$ kubectl expose deployment kiada --type=LoadBalancer --port 8080
+service/kiada exposed
+```
+
+This tells Kubernetes:
+
+1. Expose pods belonging to the `kiada` Deployment
+2. Make them reachable via a load balancer
+3. Forward to the app on port `8080`
+
+If you omit a name, the Service inherits the Deployment’s name (`kiada`).
+
+```shell
+$ kubectl get svc   # svc is short for services
+NAME         TYPE          CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+kubernetes   ClusterIP     10.19.240.1    <none>        443/TCP         34m
+kiada        LoadBalancer  10.19.243.17   <pending>     8080:30838/TCP  4s
+```
+  
+List all object types: `kubectl api-resources`.
+
+### What LoadBalancer actually means
+
+Kubernetes **does not provide the load balancer itself**. It only asks the cloud/infrastructure to create one and then records the external IP on the Service.
+
+![](./images/chapter-03/loadbalancer.png)
+
+* Cloud cluster — EXTERNAL-IP becomes a real public IP after a short wait
+* Docker Desktop — often shows `localhost` (your Mac/Windows host, not the VM)
+* kind / Minikube / many local setups — EXTERNAL-IP stays `<pending>` because nothing provisions a LB
+
+```shell
+$ kubectl get svc kiada
+NAME    TYPE          CLUSTER-IP     EXTERNAL-IP     PORT(S)         AGE
+kiada   LoadBalancer  10.19.243.17   35.246.179.22   8080:30838/TCP  82s
+
+$ curl 35.246.179.22:8080
+# Docker Desktop: curl localhost:8080
+```
+
+### Fallback: NodePort (when EXTERNAL-IP is `<pending>`)
+
+![](./images/chapter-03/node-port.png)
+
+A LoadBalancer Service still works without an external LB. Kubernetes also assigns a **node port** — a port opened on **every node** that forwards into the Service.
+
+In `PORT(S)`:
+
+```text
+8080:30838/TCP
+```
+
+* `8080` — Service port (ClusterIP)
+* `30838` — NodePort
+
+Get a node IP:
+
+```shell
+$ kubectl get nodes -o wide
+# use INTERNAL-IP, e.g. 172.18.0.2
+
+$ curl 172.18.0.2:30838
+```
+
+**Local caveats:**
+
+* Minikube — `minikube service kiada` (or `--url`) opens/prints a reachable URL
+* Docker Desktop / kind on Mac — node INTERNAL-IPs are often on Docker’s network and **not reachable from the host browser**; port-forward is the practical workaround:
+
+```shell
+kubectl port-forward svc/kiada 8080:8080
+# then: http://localhost:8080
+```
+
+> **Side note — making LoadBalancer work on kind (local)**
+>
+> On kind, `EXTERNAL-IP` stays `<pending>` until something acts as a cloud load-balancer controller. Kind’s recommended approach is **Cloud Provider KIND**.
+>
+> Docs: [kind LoadBalancer guide](https://kind.sigs.k8s.io/docs/user/loadbalancer/)
+
+#### Install Cloud Provider KIND
+
+```shell
+go install sigs.k8s.io/cloud-provider-kind@latest
+```
+
+The binary lands in `$(go env GOPATH)/bin` (often `~/go/bin`). If `cloud-provider-kind` is not found, put that directory on your `PATH`:
+
+```shell
+export PATH="$PATH:$HOME/go/bin"
+```
+
+#### Run it (keep this terminal open)
+
+Point it at your kind kubeconfig, then start the provider. On macOS / Docker Desktop, enable host port mapping so you can reach the LB from the Mac:
+
+```shell
+export KUBECONFIG=./local/kubeconfig.yaml   # or your kind kubeconfig path
+sudo cloud-provider-kind --enable-lb-port-mapping
+```
+
+`sudo` is often needed so it can open ports and talk to Docker. Leave this process running.
+
+#### Verify the Service got an EXTERNAL-IP
+
+```shell
+export KUBECONFIG=./local/kubeconfig.yaml
+kubectl -n kiada get svc kiada-service
+# EXTERNAL-IP should change from <pending> to something like 172.20.0.5
+```
+
+`EXTERNAL-IP` (e.g. `172.20.0.5`) is on Docker’s network. From macOS that address often **does not** work (`curl` times out), even though the LB is healthy.
+
+With `--enable-lb-port-mapping`, Docker publishes the LB port on the host (`0.0.0.0:8080->8080/tcp`). Use **localhost**:
+
+```shell
+curl -L http://127.0.0.1:8080/
+# browser: http://localhost:8080
+```
+
+| Address | Reachable from |
+|---------|----------------|
+| `EXTERNAL-IP:8080` (e.g. `172.20.0.5`) | Inside Docker / kind network |
+| `127.0.0.1:8080` / `localhost:8080` | Your Mac (via port mapping) |
