@@ -467,3 +467,64 @@ The **Service** load-balances across pods that match its selector (`app: kiada`)
 * Kubernetes Service -> spreads requests across the pod replicas
 
 Even with no external LB (like `cloud-provider-kind` we are locally using), the Kubernetes Service still distributes traffic across the three pods if you can reach it (e.g. NodePort / port-forward).
+
+# Understanding the deployed application
+
+Two ways to look at the system:
+
+| View | What you see |
+|------|----------------|
+| **Physical** | Containers on worker nodes; maybe a cloud/Docker LB; NodePort on kind/Minikube |
+| **Logical** | Always the same: API objects you care about as an app developer |
+
+Physical details differ (kind, EKS, Minikube, etc). If the cluster works, the **logical** view is usually enough.
+
+## Logical view — our objects
+
+![](./images/chapter-03/deployed-application.png)
+
+In our `kiada` namespace:
+
+| Object | How we created it | Role |
+|--------|-------------------|------|
+| **Deployment** `kiada` | Manifest / `kubectl apply` | App deployment: image + desired replica count |
+| **Pods** (3×) | Created automatically by the Deployment | Each replica of the app |
+| **Service** `kiada-service` | Manifest (LoadBalancer) | Single stable entry point to those pods |
+
+> Kubernetes abstracts the infrastructure: no nodes, no complex network topology, no physical load balancers in this view — just your application and supporting objects.
+
+## Pods
+
+* A Pod definition lists one or more containers; Kubernetes runs all of them.
+* While the Pod object exists, Kubernetes keeps those containers running.
+* Containers stop when the Pod is deleted.
+
+Our pods each run one container (`kiada-container` from `kiada:latest` docker image).
+
+## Deployment
+
+* Desired replicas = how many Pod objects should exist (`replicas: 3` for us).
+* If pods disappear or become unknown (node fails or network failure), Kubernetes **replaces** them to match the desired count.
+* A replacement pod is a **new** pod (new name, new IP) — not the same object revived.
+
+You *can* create pods by hand, but you’d have to unique-name every replica and babysit failures yourself. That’s why you almost always use a Deployment.
+
+## Service — why you need it even for one pod
+
+Pods are **ephemeral**. A pod can vanish when:
+
+* its node fails
+* someone deletes it
+* it’s evicted to make room for other work
+
+The Deployment creates a replacement, but that pod has a **new IP**. And if the clients are configured to talk to the pod IPs, it would break when the new Pod is created and you would manually have to re-configure the client to connect to the new IP addr. of the Pod.
+
+Unlike pods, services aren't ephemeral. A Service gives you:
+
+* a **stable IP** (and DNS name) for the lifetime of the Service
+* load balancing when multiple pods match the selector
+* routing only to healthy backing pods as the set changes
+
+So clients should hit `kiada-service` (e.g. `localhost:8080` via our local LB setup), not a pod IP directly — whether you have 1 replica or 3.
+
+This step ensures that their connections are always routed to a healthy pod, even if the set of pods behind the service is constantly changing. It also ensures that the load is distributed evenly across all pods should you decide to scale the Deployment horizontally.
