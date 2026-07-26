@@ -322,8 +322,8 @@ kubectl port-forward svc/kiada 8080:8080
 # then: http://localhost:8080
 ```
 
-> **Side note — making LoadBalancer work on kind (local)**
->
+### Side note — making LoadBalancer work on kind (local)
+
 > On kind, `EXTERNAL-IP` stays `<pending>` until something acts as a cloud load-balancer controller. Kind’s recommended approach is **Cloud Provider KIND**.
 >
 > Docs: [kind LoadBalancer guide](https://kind.sigs.k8s.io/docs/user/loadbalancer/)
@@ -331,7 +331,13 @@ kubectl port-forward svc/kiada 8080:8080
 #### Install Cloud Provider KIND
 
 ```shell
+# Install using:
 go install sigs.k8s.io/cloud-provider-kind@latest
+
+# Remove using
+rm "$(go env GOPATH)/bin/cloud-provider-kind"
+# OR:
+rm ~/go/bin/cloud-provider-kind
 ```
 
 The binary lands in `$(go env GOPATH)/bin` (often `~/go/bin`). If `cloud-provider-kind` is not found, put that directory on your `PATH`:
@@ -372,3 +378,92 @@ curl -L http://127.0.0.1:8080/
 |---------|----------------|
 | `EXTERNAL-IP:8080` (e.g. `172.20.0.5`) | Inside Docker / kind network |
 | `127.0.0.1:8080` / `localhost:8080` | Your Mac (via port mapping) |
+
+
+## Horizontally Scaling the Application
+
+You have a Deployment (desired app) and a Service (how clients reach it). **Scaling out** means running more identical instances so load can be shared.
+
+### Desired state, not “add two pods”
+
+By default a Deployment runs **1** replica. Scale with:
+
+```shell
+$ kubectl -n kiada scale deployment kiada --replicas=3
+deployment.apps/kiada scaled
+```
+
+You do **not** tell Kubernetes “create two more pods.” You set a new **desired** replica count; Kubernetes compares current vs desired and reconciles.
+
+> Instead of telling it what to do, you simply set a new desired state of the system and let Kubernetes achieve it.
+
+In our manifest we set this declaratively instead of (or in addition to) `kubectl scale`:
+
+```yaml
+# kiada/manifests/deployment.yaml
+spec:
+  replicas: 3   # We want 3 copies/replicas of our application running
+```
+
+### Seeing the result
+
+```shell
+$ kubectl -n kiada get deploy
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+kiada   3/3     3            3           5h
+
+$ kubectl -n kiada get pods
+NAME                    READY   STATUS    RESTARTS   AGE
+kiada-5d86589c4-4574v   1/1     Running   0          5h
+kiada-5d86589c4-cln2v   1/1     Running   0          5h
+kiada-5d86589c4-wfpql   1/1     Running   0          5h
+```
+
+Three pods, each with **one** container — not three containers in one pod.
+
+On a multi-node kind cluster, check placement with `-o wide`:
+
+```shell
+$ kubectl -n kiada get pods -o wide
+NAME                    ...  IP           NODE
+kiada-5d86589c4-4574v   ...  10.244.2.3   kiada-cluster-worker2
+kiada-5d86589c4-cln2v   ...  10.244.1.2   kiada-cluster-worker
+kiada-5d86589c4-wfpql   ...  10.244.2.2   kiada-cluster-worker2
+```
+
+### Does the host node matter?
+
+Usually **no**:
+
+* Same container image -> same app environment (kernel may differ slightly across nodes)
+* Every pod gets its own IP and can talk to any other pod the same way, on any node
+* With resource requests/limits set, the scheduler just needs a node that can satisfy them
+
+That’s why `kubectl get pods` (without `-o wide`) hides the node by default.
+
+> The app itself must support horizontal scaling. Kubernetes doesn’t magically make your app scalable; it merely makes it trivial to replicate it.
+
+### Service load-balances across replicas
+
+Hit the Service repeatedly. Responses should come from **different** pods (hostname in Kiada’s response):
+
+```shell
+# Our setup: cloud-provider-kind + port mapping → use localhost
+$ curl -L http://127.0.0.1:8080/
+# Request processed by "kiada-5d86589c4-4574v" ...
+
+$ curl -L http://127.0.0.1:8080/
+# Request processed by "kiada-5d86589c4-cln2v" ...
+
+$ curl -L http://127.0.0.1:8080/
+# Request processed by "kiada-5d86589c4-wfpql" ...
+```
+
+The **Service** load-balances across pods that match its selector (`app: kiada`). This is separate from the **external** LoadBalancer (cloud LB or `cloud-provider-kind`):
+
+![](./images/chapter-03/loadbalacing.png)
+
+* External LB (if any) -> gets traffic to the cluster / nodes
+* Kubernetes Service -> spreads requests across the pod replicas
+
+Even with no external LB (like `cloud-provider-kind` we are locally using), the Kubernetes Service still distributes traffic across the three pods if you can reach it (e.g. NodePort / port-forward).
