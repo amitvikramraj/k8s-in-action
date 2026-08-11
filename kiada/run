@@ -36,15 +36,21 @@ docker-run() {
 	docker compose up --build --remove-orphans
 }
 
+# Usage: ./run docker-build --image kiada --version 0.1 --push
 docker-build() {
+	local IMAGE_NAME="kiada"
 	local IMAGE_VERSION="latest"
 	local PUSH=false
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
+		    -i|--image)
+				IMAGE_NAME="$2"
+				shift 2	# Past arg and past value
+				;;
 			-v|--version)
 				IMAGE_VERSION="$2"
-				shift 2	# Past arg and past value
+				shift 2
 				;;
 			-p|--push)
 				PUSH=true
@@ -57,7 +63,7 @@ docker-build() {
 		esac
 	done
 
-	local IMAGE="avr2002/kiada:${IMAGE_VERSION}"
+	local IMAGE="avr2002/${IMAGE_NAME}:${IMAGE_VERSION}"
 
 	docker build -t "${IMAGE}" .
 
@@ -66,6 +72,11 @@ docker-build() {
 	fi
 }
 
+docker-build:ssl-proxy() {
+	pushd "${THIS_DIR}/kiada-ssl-proxy"
+	docker-build --image kiada-ssl-proxy --version 0.1 --push
+	popd
+}
 
 # Create a 3 node kubernetes cluster using kind
 create-cluster() {
