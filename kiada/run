@@ -78,6 +78,14 @@ docker-build:ssl-proxy() {
 	popd
 }
 
+# Build and push images for both init containers
+docker-build:kiada-init() {
+	pushd "${THIS_DIR}/kiada-init"
+	docker build -f ./Dockerfile.init -t "avr2002/kiada-init:0.1" --push .
+	docker build -f ./Dockerfile.network-checker -t "avr2002/kiada-network-connectivity-checker:0.1" --push .
+	popd
+}
+
 # Create a 3 node kubernetes cluster using kind
 create-cluster() {
 	# Check if docker is running

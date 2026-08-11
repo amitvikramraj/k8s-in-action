@@ -22,6 +22,15 @@ spec:
       labels:
         app: kiada
     spec:
+      initContainers:
+        - name: kiada-init
+          image: avr2002/kiada-init:0.1
+          args:
+          - "11"  # Run init for 11 seconds
+        - name: network-check
+          image: avr2002/kiada-network-connectivity-checker:0.1
+          args:
+          - "1.1.1.2"
       containers:
         - name: kiada
           image: avr2002/kiada:0.1
