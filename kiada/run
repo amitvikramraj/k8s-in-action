@@ -37,7 +37,33 @@ docker-run() {
 }
 
 docker-build() {
-	docker build -t kiada:latest .
+	local IMAGE_VERSION="latest"
+	local PUSH=false
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-v|--version)
+				IMAGE_VERSION="$2"
+				shift 2	# Past arg and past value
+				;;
+			-p|--push)
+				PUSH=true
+				shift 1	# Past arg
+				;;
+			*)
+				echo "Unknown option: ${1:-}"
+				exit 1
+				;;
+		esac
+	done
+
+	local IMAGE="avr2002/kiada:${IMAGE_VERSION}"
+
+	docker build -t "${IMAGE}" .
+
+	if $PUSH; then
+		docker push "${IMAGE}"
+	fi
 }
 
 
@@ -71,17 +97,18 @@ delete-cluster() {
 
 # Create a deployment of kiada app in the cluster
 create-deployment() {
-	# build the latest docker image
-	docker-build
+	# # build the latest docker image
+	# docker-build
 
 	# use the local image directly from host
-	kind load docker-image --name ${CLUSTER_NAME} kiada:latest
+	# kind load docker-image --name ${CLUSTER_NAME} kiada:latest
 
-	# # create a deployment
-	# kubectl create deployment kiada --image=kiada:latest || echo
-
-	# Patch the deployment to use the local image
-	# kubectl patch deployment my-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"my-local-image","imagePullPolicy":"Never"}]}}}}'
+	# If you are running it locally in kind, use the below command to be able to create a
+	# LoadBalancer Service to expose the app on your laptop
+	# 
+	# sudo cloud-provider-kind --enable-lb-port-mapping
+	#
+	# See chapter 3 notes to learn more.
 
 	# Create deployment using a manifest file
 	kubectl apply -f "${THIS_DIR}/manifests/deployment.yaml"
