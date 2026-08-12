@@ -27,6 +27,12 @@ spec:
           image: avr2002/kiada-init:0.1
           args:
           - "11"  # Run init for 11 seconds
+          # Defining `traffic-meter` as a Kubernetes native sidecar container
+          # And defining this container before `network-checker` to ensure it
+          # captures the network checker's traffic.
+        - name: traffic-meter
+          image: avr2002/kiada-network-traffic-meter:0.1
+          restartPolicy: Always
         - name: network-check
           image: avr2002/kiada-network-connectivity-checker:0.1
           args:
