@@ -12,7 +12,7 @@ So the new architecture of the app looks like:
 
 More about this in Chapter 8.
 
-Read the [deployment.yaml manifest](../manifests/deployment.yaml) to know more. To test the changes:
+Read the [deployment.yaml manifest](../../manifests/deployment.yaml) to know more. To test the changes:
 
 ```shell
 curl -L https://127.0.0.1:8443 --insecure

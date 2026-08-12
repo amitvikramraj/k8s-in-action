@@ -73,14 +73,14 @@ docker-build() {
 }
 
 docker-build:ssl-proxy() {
-	pushd "${THIS_DIR}/kiada-ssl-proxy"
+	pushd "${THIS_DIR}/containers/kiada-ssl-proxy"
 	docker-build --image kiada-ssl-proxy --version 0.1 --push
 	popd
 }
 
 # Build and push images for both init containers and the sidecar container
 docker-build:kiada-init() {
-	pushd "${THIS_DIR}/kiada-init"
+	pushd "${THIS_DIR}/containers/kiada-init"
 	# init containers
 	docker build -f ./Dockerfile.init -t "avr2002/kiada-init:0.1" --push .
 	docker build -f ./Dockerfile.network-checker -t "avr2002/kiada-network-connectivity-checker:0.1" --push .

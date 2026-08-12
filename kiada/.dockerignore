@@ -1,7 +1,7 @@
 local/
 manifests/
 scripts/
-kiada-ssl-proxy/
+containers/
 
 # ref: https://gist.github.com/KernelA/04b4d7691f28e264f72e76cfd724d448
 # Git
