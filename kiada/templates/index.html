@@ -7,18 +7,27 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/stylesheet.css') }}">
 </head>
 <body>
-<div id="background"></div>
-<div id="cover"><img src="{{ url_for('static', path='/cover.png') }}" alt="Kubernetes in Action Book Cover"></div>
-
-<div id="content">
-    <div class="bubble">
-        <table>
-            <tr><td>Kiada version:</td>        <td><b>{{version}}</b></td></tr>
-            <tr><td>Request processed by:</td> <td><b>{{hostname}}</b></td></tr>
-            <tr><td>Client IP:</td>            <td><b>{{clientIP}}</b></td></tr>
-        </table>
-    </div>
-</div>
-
+<figure class="cover-frame">
+    <img src="{{ url_for('static', path='/cover.png') }}" alt="Kubernetes in Action Book Cover">
+    <figcaption class="cover-overlay">
+        <dl>
+            <div>
+                <dt>Kiada version</dt>
+                <span>:</span>
+                <dd>{{version}}</dd>
+            </div>
+            <div>
+                <dt>Request processed by</dt>
+                <span>:</span>
+                <dd>{{hostname}}</dd>
+            </div>
+            <div>
+                <dt>Client IP</dt>
+                <span>:</span>
+                <dd>{{clientIP}}</dd>
+            </div>
+        </dl>
+    </figcaption>
+</figure>
 </body>
 </html>
