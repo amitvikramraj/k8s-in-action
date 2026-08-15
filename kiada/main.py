@@ -108,6 +108,11 @@ async def favicon():
     )
 
 
+@ROUTER.get("/health", response_class=PlainTextResponse, status_code=status.HTTP_200_OK)
+async def health_check() -> PlainTextResponse:
+    return "OK"
+
+
 async def custom_404_handler(request: Request, exc: Exception) -> PlainTextResponse:
     """Handle 404 errors."""
     return PlainTextResponse(
