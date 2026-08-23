@@ -182,7 +182,7 @@ $ kubectl get pod kiada -o json | jq .status.containerStatuses
     "reason": "CrashLoopBackOff"
 ```
 
-When a container exits with status code 0, which means it hasn't crashed, so the `CrashLoopBackOff` status can be misleading.
+> When a container exits with status code 0, which means it hasn't crashed, so the `CrashLoopBackOff` status can be misleading.
 
 ### Liveness Probes
 
@@ -251,10 +251,10 @@ spec:
 
 * For envoy proxy container, the built-in `/ready` endpoint is used. The parameters:
 
-  * `initialDelaySeconds` determines how long Kubernetes should delay the execution of the first probe after starting the container.
-  * `periodSeconds` field specifies the amount of time between the execution of two consecutive probes,
-  * `timeoutSeconds` field specifies how long to wait for a response before the probe attempt counts as failed.
-  * `failureThreshold` field specifies how many times the probe must fail for the container to be considered unhealthy and potentially restarted.
+  * `initialDelaySeconds` determines how long Kubernetes should delay the execution of the first probe after starting the container. (default: 0s)
+  * `periodSeconds` the amount of time between the execution of two consecutive probes. (default: 10s)
+  * `timeoutSeconds` how long to wait for a response before the probe attempt counts as failed. (default: 1s)
+  * `failureThreshold` how many times the probe must fail for the container to be considered unhealthy and potentially restarted. (default: 3)
 
 #### Observing liveness probe
 
@@ -334,3 +334,99 @@ Applications that do not accept TCP connections can use an exec liveness probe. 
 
 Above example probe runs `/usr/bin/healthcheck` every 2 seconds to determine whether the application running in the container is still alive. If it returns a non-zero exit code or fails to complete within 1 second as specified in the `timeoutSeconds` field, the container is terminated immediately, as configured in the `failureThreshold` field, which indicates that a single probe failure is sufficient to consider the container unhealthy.
 
+### Startup Probe
+
+The container can be running before the application inside it is ready to accept requests. A slow-starting application may therefore fail its liveness probe even though it is still starting normally.
+
+```text
+Container started          <--- kubelet: "Started container kiada"
+  │
+  ├── import FastAPI, Jinja2, templates, static files
+  ├── create the app
+  ├── bind 0.0.0.0:8080
+  └── "Uvicorn running on http://0.0.0.0:8080"
+                              <--- now it can accept HTTP request
+```
+
+With the default liveness probe settings, an application generally has only 20–30 seconds to begin responding. If it takes longer, Kubernetes terminates and restarts the container. Repeated slow starts can trap the container in an endless restart loop.
+
+```text
+t = 0s   Container started (Java process is PID 1)
+t = 5s   Still loading classes / connecting to the database
+t = 20s  Still not listening on 8080
+t = 30s  Tomcat: "listening on 8080"  <--- first successful HTTP request
+```
+
+The liveness probe could be made more tolerant by increasing `initialDelaySeconds`, `periodSeconds`, or `failureThreshold`, but this also delays the detection of failures after the application has started:
+
+```text
+Approximate failure-detection window = periodSeconds × failureThreshold
+```
+
+For applications that take minutes to start, using relaxed liveness settings for both startup and normal operation is undesirable. A startup probe allows each phase to use different settings.
+
+#### Combining startup and liveness probes
+
+When a `startupProbe` is configured:
+
+1. Kubernetes executes only the startup probe while the application is starting.
+2. Failures are expected and mean that the application has not finished starting.
+3. After the startup probe succeeds once, Kubernetes stops running it and begins running the liveness probe.
+4. If the startup probe reaches its `failureThreshold`, Kubernetes terminates the container as it would for a failed liveness probe.
+
+```yaml
+containers:
+- name: kiada
+  image: avr2002/kiada:0.1
+  ports:
+  - name: http
+    containerPort: 8080
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    periodSeconds: 10
+    failureThreshold: 12
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    periodSeconds: 5
+    failureThreshold: 2
+```
+
+![](./images/chapter-06/startup-probe.png)
+
+In this example:
+
+* The startup probe allows up to `10 × 12 = 120` seconds for the application to start.
+* After startup succeeds, the liveness probe checks every 5 seconds.
+* Two consecutive liveness failures allow an unhealthy application to be detected in about 10 seconds.
+* This allows fast detection of application health problems.
+
+The startup and liveness probes usually use the same endpoint, but they may use different endpoints. A startup probe can also use `exec` or `tcpSocket` instead of `httpGet`.
+
+### Creating Effective Liveness Probe Handlers
+
+A liveness probe detects situations where the application process is still running but the application can no longer do useful work. Without one, Kubernetes can automatically restart the container only when its main process terminates.
+
+However, an incorrect liveness probe can cause Kubernetes to restart a healthy application. If the application can reliably terminate itself when it becomes unhealthy, having no liveness probe may be safer than having a badly implemented one.
+
+#### What a liveness probe should check
+
+For a web application, even a simple probe that checks whether the server responds to an HTTP request can detect a nonresponsive server. A dedicated endpoint such as `/healthz` can additionally verify that the application's important internal components are functioning.
+
+A good liveness endpoint should:
+
+* Check only the application's internal health.
+* Return quickly and use little CPU and memory.
+* Not require authentication.
+* Avoid depending on external services such as databases, backend APIs, or message brokers.
+
+> If a frontend's liveness probe fails whenever its backend is unavailable, restarting the frontend cannot repair the backend. It can instead cause repeated restarts and turn one service failure into a cascading failure.
+
+Probe execution consumes resources from the container's CPU and memory limits. Prefer a lightweight HTTP probe over an expensive `exec` probe, for example, in case of a Java app, an exec probe could be expensive because it would start an entire JVM just to check the health of the app.
+
+#### Avoiding retry loops in probe handlers
+
+Keep the probe handler simple and perform a single check. Use Kubernetes' `failureThreshold` to require several consecutive failures instead of implementing a retry loop inside the handler. This avoids duplicated retry logic and another potential point of failure.

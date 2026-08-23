@@ -43,10 +43,18 @@ spec:
           imagePullPolicy: IfNotPresent   # Values can be Always, IfNotPresent, Never
           ports:
             - containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 12
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
+            periodSeconds: 5
+            failureThreshold: 2
           resources:
             requests:
               cpu: "70m"      # 0.070 CPU cores
