@@ -58,7 +58,7 @@ The phase of a pod says little about the condition of the pod. In contrast to th
 | PodScheduled | Indicates whether the pod has been scheduled to a node. |
 | Initialized | The pod’s init containers have all completed successfully. |
 | ContainersReady | All containers in the pod indicate that they are ready. This is a necessary but not sufficient condition for the entire pod to be ready. |
-| Ready | The pod is ready to provide services to its clients. The containers in the pod and the pod’s readiness gates are all reporting that they are ready. |
+| Ready | The pod is ready to provide services to its clients. The containers in the pod and the pod’s *readiness gates* are all reporting that they are ready. |
 
 
 ![](./images/chapter-06/pod-condition.png)
@@ -69,9 +69,9 @@ The phase of a pod says little about the condition of the pod. In contrast to th
 
 * In contrast, the `Ready` and `ContainersReady` conditions can change many times during the pod’s lifetime.
 
-Each object type has its own set of conditions, for instance a Node Object has – `MemoryPressure`, `DiskPressure`, `PIDPressure`, and `Ready`.
+* Each object type has its own set of conditions, for instance a Node Object has – `MemoryPressure`, `DiskPressure`, `PIDPressure`, and `Ready`.
 
-The `Ready` condition is quite generic across all object types which indicates everything is fine with the object.
+* The `Ready` condition is quite generic across all object types which indicates everything is fine with the object.
 
 
 ```bash
@@ -105,6 +105,36 @@ The `kubectl describe` command shows only whether each condition is true. To fin
 * The condition can also contain a reason field that specifies a machine-facing reason for the last change of the condition’s status, and a message field that explains the change in detail.
 
 * The `lastTransitionTime` field shows when the change occurred, while the `lastProbeTime` indicates when this condition was last checked.
+
+
+#### Pod Readiness Gate
+
+A Pod can have `ContainersReady: True` while its overall `Ready` condition remains `False`. **Readiness gates** let you
+require additional custom conditions before the Pod becomes Ready.
+
+For example, during a rolling update, an application may pass its readiness probe before a cloud load balancer finishes
+registering its backend. A readiness gate lets an external controller hold back Pod readiness until the load balancer
+reports that backend as healthy.
+
+Without readiness gates, Kubernetes may count the new Pod as available and begin removing an old Pod before the load
+balancer can route traffic to the replacement. If too few healthy targets remain, requests can fail during this gap.
+
+```yaml
+spec:
+  readinessGates:
+    - conditionType: example.com/load-balancer-ready
+  containers:
+    - name: kiada
+      image: avr2002/kiada:0.1
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+```
+
+A controller must update the matching condition in `status.conditions`. A missing condition is treated as `False`.
+All containers must be ready and every configured gate must be `True` for the Pod to become Ready.
+
 
 ### Understanding the Container Status & State
 
