@@ -133,7 +133,9 @@ create-deployment() {
 	# See chapter 3 notes to learn more.
 
 	# Create deployment using a manifest file
-	kubectl apply -f "${THIS_DIR}/manifests/deployment.yaml"
+	kubectl apply -f "${THIS_DIR}/manifests/namespace.yaml"
+	kubectl apply -f "${THIS_DIR}/manifests/deployment.yaml" \
+	              -f "${THIS_DIR}/manifests/service.yaml"
 }
 
 

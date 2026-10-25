@@ -1,0 +1,5 @@
+# Create a namespace for the app
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kiada

@@ -1,9 +1,3 @@
-# Create a namespace for the app
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kiada
----
 # Create a deployment for the app
 apiVersion: apps/v1
 kind: Deployment
@@ -27,16 +21,19 @@ spec:
           image: avr2002/kiada-init:0.1
           args:
           - "11"  # Run init for 11 seconds
+
           # Defining `traffic-meter` as a Kubernetes native sidecar container
           # And defining this container before `network-checker` to ensure it
           # captures the network checker's traffic.
         - name: traffic-meter
           image: avr2002/kiada-network-traffic-meter:0.1
           restartPolicy: Always
+
         - name: network-check
           image: avr2002/kiada-network-connectivity-checker:0.1
           args:
           - "1.1.1.2"
+
       containers:
         - name: kiada
           image: avr2002/kiada:0.1
@@ -62,6 +59,7 @@ spec:
             limits:
               cpu: "100m"     # 0.100 CPU cores
               memory: "256Mi"
+
         - name: envoy
           image: avr2002/kiada-ssl-proxy:0.1
           ports:
@@ -77,39 +75,3 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
----
-# Create a Service of type "LoadBalancer" to expose the app to the outside world
-# Locally this does not fully work with `kind` because locally there is no
-# external service to provision a LoadBalancer, so EXTERNAL-IP stays `<pending>`.
-# Run `kubectl -n kiada get svc kiada-service` to see this.
-#
-# As a work around we can use `cloud-provider-kind` program that can connect to kind
-# cluster and can provision a LB container for the services. Refer Chapter 3 notes.
-apiVersion: v1
-kind: Service
-metadata:
-  name: kiada-service
-  namespace: kiada
-spec:
-  type: "LoadBalancer"
-  selector:
-    app: kiada        # This much match the Pod Label
-  ports:
-  # Kiada App port mapping
-  # Test with curl -L http://127.0.0.1:8443
-  - name: http
-    protocol: TCP
-    port: 8080        # Port exposed by this service 
-    targetPort: 8080  # Port your container is listening on
-  # Envoy Port mapping
-  # Test with: curl -Lk https://127.0.0.1:8443 OR curl -L https://127.0.0.1:8443 --insecure
-  # ^^^short for `--insecure`` flag is `-k` flag
-  #
-  # NOTE: If it does not work, try deleting the LoadBalancer Service and re-deploying.
-  # `cloud-provider-kind` doesn't reliably update the port mapping, if ports are added later.
-  - name: https
-    port: 8443
-    targetPort: 8443
-  - name: admin
-    port: 9901
-    targetPort: 9901

@@ -1,0 +1,35 @@
+# Create a Service of type "LoadBalancer" to expose the app to the outside world
+# Locally this does not fully work with `kind` because locally there is no
+# external service to provision a LoadBalancer, so EXTERNAL-IP stays `<pending>`.
+# Run `kubectl -n kiada get svc kiada-service` to see this.
+#
+# As a work around we can use `cloud-provider-kind` program that can connect to kind
+# cluster and can provision a LB container for the services. Refer Chapter 3 notes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kiada-service
+  namespace: kiada
+spec:
+  type: "LoadBalancer"
+  selector:
+    app: kiada        # This much match the Pod Label
+  ports:
+  # Kiada App port mapping
+  # Test with curl -L http://127.0.0.1:8443
+  - name: http
+    protocol: TCP
+    port: 8080        # Port exposed by this service 
+    targetPort: 8080  # Port your container is listening on
+  # Envoy Port mapping
+  # Test with: curl -Lk https://127.0.0.1:8443 OR curl -L https://127.0.0.1:8443 --insecure
+  # ^^^short for `--insecure`` flag is `-k` flag
+  #
+  # NOTE: If it does not work, try deleting the LoadBalancer Service and re-deploying.
+  # `cloud-provider-kind` doesn't reliably update the port mapping, if ports are added later.
+  - name: https
+    port: 8443
+    targetPort: 8443
+  - name: admin
+    port: 9901
+    targetPort: 9901
