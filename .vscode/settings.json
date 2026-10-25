@@ -51,4 +51,8 @@
     "basedpyright.analysis.inlayHints.genericTypes": false,
     "basedpyright.analysis.inlayHints.functionReturnTypes": false,
     "python-envs.pythonProjects": [],
+    // Kubernetes Extention settings
+    "vs-kubernetes": {
+        "disable-linters": ["resource-limits"]
+    }
 }
