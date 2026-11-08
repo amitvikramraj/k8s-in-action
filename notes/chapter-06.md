@@ -175,6 +175,7 @@ Containers:
 $ kubectl get pod kiada -o json | jq .status.containerStatuses
 ```
 
+
 ## Keeping Containers Healthy
 
 Once the pod object is live, and if the main process in the container terminates for any reason, the Kubelet restarts the container.
@@ -460,3 +461,245 @@ Probe execution consumes resources from the container's CPU and memory limits. P
 #### Avoiding retry loops in probe handlers
 
 Keep the probe handler simple and perform a single check. Use Kubernetes' `failureThreshold` to require several consecutive failures instead of implementing a retry loop inside the handler. This avoids duplicated retry logic and another potential point of failure.
+
+## Executing Actions at Container Start-up and Shutdown
+
+Using *lifecycle hooks* Kubernetes lets us run additional processes every time a container starts and just before it stops.
+
+* These are of 2 types:
+
+  * *Post-start* - hooks—Executed when the container starts
+  * *Pre-stop* - hooks—Executed shortly before the container stops
+
+
+* Lifecycle hooks are specified per container, as opposed to init containers, which are specified at the pod level.
+
+* Like liveness probes, lifecycle hooks can be used to either execute a command inside the container, or send an HTTP GET request to the application in the container.
+  
+  * You can't specify both an `exec` and an `httpGet` post-start hook for a container. They are mutually exclusive.
+
+* Similar to liveness probes, lifecycle hooks can only be applied to regular containers and not init containers.
+
+* **When to use lifecycle hooks:**
+
+  * If you’re the author of the application, you could perform the same operation within the application code itself, but if you need to add it to an existing application that you didn’t create yourself, you may not be able to do so. Lifecycle hook can provides a simple alternative that doesn’t require changeing the app or its container image.
+
+### Understanding How a Post-Start Hook Affects the Container
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: quote-poststart
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - name: http
+      containerPort: 80
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - sh
+          - -c
+          - |
+            apk add fortune && \
+            curl -O https://luksa.github.io/kiada/book-quotes.txt && \
+            curl -O https://luksa.github.io/kiada/book-quotes.txt.dat && \
+            fortune book-quotes.txt > /usr/share/nginx/html/quote
+          ## Failing the post-start hook:
+          # command:
+          # - sh
+          # - -c
+          # - "echo 'Emulating a post-start hook failure'; exit 1"
+```
+
+* **Runs concurrently with the main process:** The post-start hook does not run before the application's entrypoint. The application may already be running while the hook is still executing.
+
+* **Delays completion of container startup:** Until the hook completes, the container can be reported as `Waiting` with reason `ContainerCreating`, even though its processes are running. Until then the the Pod remains in `Pending` phase.
+
+* **Can temporarily block logs and port-forwarding:** During this startup period, Kubernetes can refuse log access and port-forwarding, despite the application process already running.
+
+* **Failure terminates the container:** If the hook cannot execute or exits with a non-zero code, Kubernetes kills the container. Whether it restarts depends on the Pod's `restartPolicy`; repeated failures can lead to `CrashLoopBackOff`.
+
+* A `FailedPostStartHook` event reports the hook failure and may include its exit code and what it might have printed to stdout or stderr.
+
+* If the hooks runs successfully, the output (if any) is not logged anywhere. For that the command must log to a file instead of stdout/stderr. The log file contents can be viewed lik: `kubectl exec my-pod -- cat logfile.txt`
+
+
+### Using Pre-Stop hooks
+
+* **Runs before the stop signal:** When Kubernetes stops a running container, it executes the pre-stop hook before _sending the main process its stop signal (normally `SIGTERM`)_. The hook can execute a command, send an HTTP GET request, or introduce a sleep delay.
+
+* **Supports graceful shutdown:** The hook can initiate shutdown or perform cleanup without changing the application code. For example, Nginx's graceful quit action stops accepting new connections and allows in-flight requests to finish, whereas its `SIGTERM` handling performs a fast shutdown.
+
+* **Failure does not prevent termination:** If the hook cannot execute or returns a non-zero exit code, container termination still proceeds. A `FailedPreStopHook` warning event reports the failure, which may not be apparent from the Pod's status alone.
+
+* **Runs on Kubernetes-initiated stops:** The hook can run during Pod shutdown or a container restart caused by a failed liveness probe. It is not called when the application process exits on its own.
+
+* **Fix signal forwarding at the source:** A shell used as the container's main process may not forward `SIGTERM` to the application. Prefer the exec form of `ENTRYPOINT` or `CMD`; wrapper scripts should replace themselves with the application using `exec`, or explicitly forward signals. Adding a pre-stop hook just to forward `SIGTERM` does not fix the underlying problem.
+
+* **Applies to a container, not the entire Pod:** A pre-stop hook can run multiple times during a Pod's lifetime as its container is restarted. Do not treat it as an action that runs only once when the whole Pod shuts down.
+
+#### Why an Application Might Not Receive SIGTERM
+
+During normal container shutdown, the container runtime sends the stop signal (usually `SIGTERM`) to the container's main process, PID 1. **The signal can reach PID 1 correctly without ever reaching the application**, if a shell sits between them.
+
+For Kiada, `uvicorn main:app --host 0.0.0.0 --port 8080` serves the FastAPI `app` defined in `main.py`.
+
+The **shell form** of a Dockerfile's `ENTRYPOINT` runs the command through a shell:
+
+```dockerfile
+ENTRYPOINT uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+The process structure can look like this:
+
+```text
+Container
+└── /bin/sh -c "uvicorn main:app --host 0.0.0.0 --port 8080"    PID 1 ← receives SIGTERM
+    └── uvicorn main:app --host 0.0.0.0 --port 8080             Child process
+```
+
+Signals sent to a parent process do not automatically propagate to its children. If the shell does not forward `SIGTERM`, the application continues running and its shutdown handler is never called. It may eventually be forcibly stopped when the termination grace period expires, without getting a chance to finish requests or clean up.
+
+The **exec form** avoids introducing this shell:
+
+```dockerfile
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+```text
+Container
+└── uvicorn main:app --host 0.0.0.0 --port 8080    PID 1 ← receives SIGTERM directly
+```
+
+The same distinction applies to `CMD` when it is used to launch the application. Receiving the signal is only the first step; the application must also handle it appropriately for graceful shutdown.
+
+**Startup scripts can introduce the same problem**, even when the Dockerfile uses exec form:
+
+```dockerfile
+ENTRYPOINT ["/app/start.sh"]
+```
+
+If the script simply runs `uvicorn main:app --host 0.0.0.0 --port 8080`, its shell can remain PID 1 with the server as a child. After performing initialization, the script should use `exec`:
+
+```sh
+#!/bin/sh
+# Perform initialization here...
+exec uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+Here, **`exec` replaces the shell with the application**, keeping the same PID instead of starting another child process. If the wrapper must remain running, it needs to explicitly forward signals and wait for the application to exit.
+
+Adding a pre-stop hook just to send `SIGTERM` manually treats the symptom. Fixing the entrypoint or wrapper script allows the normal shutdown signal to reach the application.
+
+
+## Understading Pod Life Cycle
+
+When a Pod object is created, Kubernetes schedules it to a worker node that then runs its containers. The pod’s life cycle is divided into the three stages:
+
+![](./images/chapter-06/pod-lifecycle.png)
+
+1. The *initialization stage*, during which the pod’s init containers run.
+2. The *run stage*, in which the regular containers of the pod run.
+3. The *termination stage*, in which the pod’s containers are terminated.
+
+### Initialization Stage
+
+**Pulling the Image**
+
+* First the container image is pulled to the worker node. The `imagePullPolicy` field controls when Kubernetes pulls a container image. It is also applied every time the container is restarted.
+
+| Image pull policy | Description |
+| --- | --- |
+| Not specified | Defaults to `Always` when the image tag is `:latest` or omitted; otherwise defaults to `IfNotPresent`. |
+| `Always` | The kubelet contacts the image registry each time it starts the container and checks the image reference. If the image is already cached by digest, it can reuse the cached layers without downloading them again. |
+| `IfNotPresent` | Pulls the image only when it is not already present on the worker node. |
+| `Never` | Never pulls the image. It must already be available on the worker node. |
+
+
+**Running the Containers**
+
+* Init containers run in the order specified in the `initContainers` field in the pod's spec.
+
+* If the container terminates with an error and the pod’s restart policy is set to `Always` or `OnFailure`, the failed init container is restarted.
+
+* If the policy is set to `Never`, the subsequent init containers and the pod’s regular containers are never started.
+
+* The pod's status is displayed as `Init:Error` indefinitely, we would then have to delete and recreate the Pod object to restart the application.
+
+* Init containers are normally only executed once. Even if one of the pod’s main containers is terminated later, the pod's init containers are not re-executed. But if the entire pod needs to be restarted, they may be executed again. This means, **the operations performed by init containers must be idempotent.**
+
+### Run Stage
+
+Once all regular init containers complete successfully, the kubelet starts the pod's regular containers. Each container can start and terminate at a different time.
+
+**Pulling the Image**
+
+* Before creating each container, the kubelet makes its image available according to the `imagePullPolicy`.
+
+* If an image pull is slow or fails, the pod's other containers can still start. Containers that depend on each other should not assume they will all start at the same time.
+
+**Running the Containers**
+
+* The container starts when the main container process starts. If a post-start hook is defined in the container, it is invoked in parallel with the main container process.
+
+* The post-start hook runs asynchronously and must be successful for the container to continue running.
+
+* If a startup probe is configured, the liveness and readiness probes wait for it to succeed. Without a startup probe, they can run without waiting for one.
+
+> The kubelet can start regular containers in the order listed in the pod spec, and a slow `postStart` hook can delay the next container. This is an implementation detail and should not be relied on as a startup ordering guarantee.
+
+**Terminating and Restarting Containers**
+
+* When a startup or liveness probe reaches its failure threshold, Kubernetes terminates the container. The pod's `restartPolicy` determines whether it is restarted.
+
+* A failed `postStart` hook also causes the container to be terminated and is subject to the restart policy.
+
+* A failed `postStart` hook with `restartPolicy: Never` can still show the pod's status as `Completed`. Check the container's termination details and pod events to understand what happened.
+
+* Regular containers generally terminate without a guaranteed order. A slow `preStop` hook delays its own container, but should not be used to order the shutdown of other containers. Native sidecars are stopped after the main containers, in reverse order of their declaration.
+
+**Termination Grace Period**
+
+![](./images/chapter-06/container-termination-seq.png)
+
+* When Kubernetes needs to stop a container, it runs the container's `preStop` hook, if defined, and then sends the main process a stop signal (normally `SIGTERM`). This gives the application a chance to finish its work and exit.
+
+* The pod's `spec.terminationGracePeriodSeconds` defaults to **30 seconds**. The timer starts before the `preStop` hook runs, so the hook and the application's shutdown share the same time budget. If the process is still running when the period expires, Kubernetes forcibly kills it with `SIGKILL`.
+
+* After termination, the container is restarted if the pod's `restartPolicy` allows it. Otherwise, it remains terminated while the pod's other containers can keep running.
+
+### Termination Stage
+
+Deleting a pod starts the shutdown of its containers. `kubectl` displays the pod as `Terminating` during this process; `Terminating` is not a pod phase.
+
+![](./images/chapter-06/pod-termination-seq.png)
+
+**Deletion Grace Period**
+
+* The deletion request sets `metadata.deletionGracePeriodSeconds`, normally using the value of `spec.terminationGracePeriodSeconds`. The `kubectl delete --grace-period` option can override it for that deletion.
+
+* Each regular container follows the same shutdown sequence: run its `preStop` hook, send the stop signal, and force-kill it if the deadline expires. Their shutdowns can happen concurrently. Kubernetes removes the Pod object after its containers have stopped.
+
+* A zero-second deletion grace period skips `preStop` hooks. Give applications enough time to finish in-flight work; shortening the period can turn a slow graceful shutdown into a forced kill.
+
+
+## Visualizing the full life cycle of the pod’s containers
+
+Pod's Initialization Stage:
+
+![](./images/chapter-06/pod-init-lifecycle.png)
+
+Pod's Normal Operation:
+
+![](./images/chapter-06/pod-normal-lifecycle.png)
+
+
+> Note: If an init container’s `restartPolicy` is set to `Always`, the init container is a sidecar container and is not expected to terminate. Thus, the next init container is started after the sidecar container fully starts.
+
+> Note: If the Pod contains native sidecar containers, they are terminated after all the regular containers have terminated. The sidecars are terminated in the reverse order of their appearance in the `initContainers` list.
+
